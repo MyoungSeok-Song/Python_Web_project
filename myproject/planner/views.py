@@ -3,7 +3,7 @@ import re
 import random
 import string
 import requests # 실제 API 호출 시 사용
-from django.shortcuts import render, redirect
+from django.shortcuts import render, redirect, get_object_or_404
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.core.paginator import Paginator
@@ -12,6 +12,9 @@ from django.core.mail import send_mail  # 실제 메일 전송 시 사용 (설�
 from django.contrib.auth.hashers import make_password  # 해시 처리를 위한 함수
 from django.contrib.auth.hashers import check_password
 from .email_utils import send_email_dynamic
+from django.views.decorators.http import require_POST
+from django.contrib.auth.decorators import login_required
+
 
 
 def main_page(request):
@@ -348,9 +351,33 @@ def board_detail(request, board_id):
     """
     게시글 상세보기 페이지
     """
-    board = Board.objects.get(id=board_id)
-    return render(request, "planner/board_detail.html", {"board": board})
+    board = get_object_or_404(Board, id=board_id)
+    is_liked = False
+    if request.user.is_authenticated:
+        is_liked = board.is_liked_by(request.user)
+    context = {
+        "board": board,
+        "is_liked": is_liked,
+    }
+    return render(request, "planner/board_detail.html", context)
 
+
+@login_required
+@require_POST
+def board_like(request, board_id):
+    """
+    게시글 좋아요 기능.
+    로그인한 사용자가 좋아요 버튼을 누르면, 
+    이미 좋아요한 경우 좋아요를 제거하고, 그렇지 않으면 추가합니다.
+    AJAX 요청에 대해 JSON 형식으로 결과를 반환합니다.
+    """
+    board = get_object_or_404(Board, id=board_id)
+    liked = board.toggle_like(request.user)  # 토글 결과 (추가되면 True, 제거되면 False)
+    data = {
+        "liked": liked,
+        "total_likes": board.total_likes(),
+    }
+    return JsonResponse(data)
 
 @csrf_exempt
 def board_create(request):

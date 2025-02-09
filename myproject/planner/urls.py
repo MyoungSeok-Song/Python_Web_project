@@ -1,3 +1,4 @@
+from django.contrib.auth import views as auth_views
 from django.urls import path
 from . import views
 
@@ -17,6 +18,10 @@ urlpatterns = [
     path('board/<int:board_id>/', views.board_detail, name='board_detail'),
     path('board/<int:board_id>/update/', views.board_update, name='board_update'),
     path('board/<int:board_id>/delete/', views.board_delete, name='board_delete'),
+    path('board/<int:board_id>/like/', views.board_like, name='board_like'),
+    path('accounts/login/', auth_views.LoginView.as_view(), name='login'),
+    # 로그아웃 URL도 필요하면 추가
+    path('accounts/logout/', auth_views.LogoutView.as_view(), name='logout'),
     # 댓글 관련 URL
     path('board/<int:board_id>/comment/create/', views.comment_create, name='comment_create'),
     path('comment/<int:comment_id>/delete/', views.comment_delete, name='comment_delete'),

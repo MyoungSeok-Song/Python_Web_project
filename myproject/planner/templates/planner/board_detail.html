@@ -17,7 +17,21 @@
          <a href="{% url 'board_delete' board.id %}" class="btn btn-danger">삭제</a>
        {% endif %}
        <a href="{% url 'board_list' %}" class="btn btn-secondary">목록</a>
-
+       
+       <!-- 좋아요 버튼과 좋아요 수 표시 영역 -->
+        <div id="like-section" class="d-flex align-items-center">
+            <button id="like-btn" class="btn btn-primary me-2">
+                {% if request.user.is_authenticated and is_liked %}
+                    좋아요 취소
+                {% else %}
+                    좋아요
+                {% endif %}
+            </button>
+            <!-- 로컬 이미지 파일을 좋아요 아이콘으로 사용 -->
+            <img src="{% static 'images/thumbs-up/thumbs-up-regular.svg' %}" alt="좋아요" style="width: 20px; height: 20px;" class="me-1">
+            <span id="like-count">{{ board.total_likes }}</span> 개
+        </div>
+       
        <hr>
        <h4>댓글</h4>
        <div id="comment-list">
@@ -45,64 +59,100 @@
            </div>
            <button type="submit" class="btn btn-primary">댓글 작성</button>
        </form>
-
    </div>
 
-   <script>
-      $(document).ready(function(){
-         // 댓글 작성 폼 처리
-         $("#commentForm").submit(function(event){
-            event.preventDefault();
-            $.ajax({
-               url: "{% url 'comment_create' board.id %}",
-               type: "POST",
-               data: $(this).serialize(),
-               headers: { "X-CSRFToken": "{{ csrf_token }}" },
-               success: function(response){
-                  if(response.status === "success"){
-                     alert(response.message);
-                     // 댓글 데이터 받아와서 댓글 목록에 추가
-                     var comment = response.comment;
-                     var commentHtml = '<div class="card mb-2" id="comment-' + comment.id + '">';
-                     commentHtml += '<div class="card-body">';
-                     commentHtml += '<p><strong>' + comment.author + '</strong> <small class="text-muted">' + comment.created_at + '</small></p>';
-                     commentHtml += '<p>' + comment.content + '</p>';
-                     // 삭제 버튼 (현재 로그인 사용자와 댓글 작성자가 일치할 때)
-                     commentHtml += '<button class="btn btn-sm btn-danger delete-comment" data-comment-id="' + comment.id + '">삭제</button>';
-                     commentHtml += '</div></div>';
-                     $("#comment-list").prepend(commentHtml);
-                     $("#commentContent").val('');
-                  }
-               },
-               error: function(xhr){
-                  alert("오류: " + xhr.responseJSON.message);
-               }
+    <script>
+        // 현재 사용자의 로그인 상태를 템플릿 변수로 전달 (true 또는 false)
+        var isAuthenticated = {{ request.user.is_authenticated|yesno:"true,false" }};
+    
+        $(document).ready(function(){
+            // 댓글 폼 제출 이벤트 핸들러
+            $("#commentForm").submit(function(event){
+                event.preventDefault();
+    
+                // 사용자가 로그인하지 않은 경우, 로그인 모달을 띄움
+                if (!isAuthenticated) {
+                    var loginModal = new bootstrap.Modal(document.getElementById('loginModal'));
+                    loginModal.show();
+                    return;
+                }
+    
+                $.ajax({
+                    url: "{% url 'comment_create' board.id %}",
+                    type: "POST",
+                    data: $(this).serialize(),
+                    headers: { "X-CSRFToken": "{{ csrf_token }}" },
+                    success: function(response){
+                        if(response.status === "success"){
+                            var comment = response.comment;
+                            var commentHtml = '<div class="card mb-2" id="comment-' + comment.id + '"><div class="card-body">';
+                            commentHtml += '<p><strong>' + comment.author + '</strong> <small class="text-muted">' + comment.created_at + '</small></p>';
+                            commentHtml += '<p>' + comment.content + '</p>';
+                            commentHtml += '<button class="btn btn-sm btn-danger delete-comment" data-comment-id="' + comment.id + '">삭제</button>';
+                            commentHtml += '</div></div>';
+                            $("#comment-list").prepend(commentHtml);
+                            $("#commentContent").val('');
+                        }
+                    },
+                    error: function(xhr){
+                        alert("오류: " + xhr.responseJSON.message);
+                    }
+                });
             });
-         });
-
-         // 댓글 삭제 처리 (동적 이벤트 바인딩)
-         $("#comment-list").on("click", ".delete-comment", function(){
-            var commentId = $(this).data("comment-id");
-            if(confirm("정말 삭제하시겠습니까?")){
-               $.ajax({
-                  url: "/comment/" + commentId + "/delete/",
-                  type: "POST",
-                  data: {},
-                  headers: { "X-CSRFToken": "{{ csrf_token }}" },
-                  success: function(response){
-                     if(response.status === "success"){
-                        alert(response.message);
-                        $("#comment-" + commentId).remove();
-                     }
-                  },
-                  error: function(xhr){
-                     alert("오류: " + xhr.responseJSON.message);
-                  }
-               });
-            }
-         });
-      });
-   </script>
-   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+            // 댓글 삭제 이벤트 핸들러
+            $("#comment-list").on("click", ".delete-comment", function(){
+                var commentId = $(this).data("comment-id");
+                if(confirm("정말 삭제하시겠습니까?")){
+                    $.ajax({
+                        url: "/comment/" + commentId + "/delete/",
+                        type: "POST",
+                        data: {},
+                        headers: { "X-CSRFToken": "{{ csrf_token }}" },
+                        success: function(response){
+                            if(response.status === "success"){
+                                $("#comment-" + commentId).remove();
+                            }
+                        },
+                        error: function(xhr){
+                            alert("오류: " + xhr.responseJSON.message);
+                        }
+                    });
+                }
+            });
+    
+            // 좋아요 버튼 클릭 이벤트 핸들러
+            $('#like-btn').click(function(){
+                // 로그인하지 않은 경우, 로그인 모달을 띄움
+                if (!isAuthenticated) {
+                    var loginModal = new bootstrap.Modal(document.getElementById('loginModal'));
+                    loginModal.show();
+                    return;
+                }
+                $.ajax({
+                    url: "{% url 'board_like' board.id %}",
+                    type: "POST",
+                    data: {
+                        csrfmiddlewaretoken: '{{ csrf_token }}'
+                    },
+                    success: function(response) {
+                        // 업데이트된 좋아요 수 반영
+                        $('#like-count').text(response.total_likes);
+                        // 버튼 텍스트 업데이트 (좋아요 상태에 따라)
+                        if (response.liked) {
+                            $('#like-btn').text('좋아요 취소');
+                        } else {
+                            $('#like-btn').text('좋아요');
+                        }
+                    },
+                    error: function(xhr, errmsg, err){
+                        console.error("에러 발생: " + errmsg);
+                    }
+                });
+            });
+        });
+    </script>
+    <!-- 부트스트랩 JS (모달 기능 활성화를 위해) -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
